@@ -37,7 +37,8 @@ After=syslog.target network.target nss-lookup.target network-online.target
 [Service]
 Environment="LD_LIBRARY_PATH=./linux64"
 ExecStartPre=$STEAM_INSTALL_SCRIPT
-ExecStart=/home/ubuntu/.steam/SteamApps/common/SatisfactoryDedicatedServer/FactoryServer.sh -ServerQueryPort=15777 -BeaconPort=15000 -Port=7777 -log -unattended
+ExecStartPre=aws s3 sync s3://$S3_SAVE_BUCKET /home/ubuntu/.config/Epic/FactoryGame/Saved/SaveGames/server
+ExecStart=/home/ubuntu/.steam/SteamApps/common/SatisfactoryDedicatedServer/FactoryServer.sh -DisableSeasonalEvents
 User=ubuntu
 Group=ubuntu
 StandardOutput=journal
@@ -59,6 +60,7 @@ connectionBytes=\$(ss -lu | grep 7777 | awk -F ' ' '{s+=\$2} END {print s}')
         
 if [ -z \$connectionBytes ] || [ \$connectionBytes -eq 0 ]; then
     echo "No game activity detected. Shutting down."
+    aws s3 sync /home/ubuntu/.config/Epic/FactoryGame/Saved/SaveGames/server s3://$S3_SAVE_BUCKET
     sudo shutdown -h now
 fi
 EOF
