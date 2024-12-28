@@ -52,56 +52,18 @@ systemctl enable satisfactory
 systemctl start satisfactory
 
 # enable auto shutdown: https://github.com/feydan/satisfactory-tools/tree/main/server-hosting/scripts/auto-shutdown.sh
-cat << 'EOF' > /home/ubuntu/auto-shutdown.sh
+cat << EOF > /home/ubuntu/auto-shutdown.sh
 #!/bin/sh
 
-shutdownIdleMinutes=30
-idleCheckFrequencySeconds=1
-
-isIdle=0
-while [ $isIdle -le 0 ]; do
-    isIdle=1
-    iterations=$((60 / $idleCheckFrequencySeconds * $shutdownIdleMinutes))
-    while [ $iterations -gt 0 ]; do
-        sleep $idleCheckFrequencySeconds
-        connectionBytes=$(ss -lu | grep 777 | awk -F ' ' '{s+=$2} END {print s}')
-        if [ ! -z $connectionBytes ] && [ $connectionBytes -gt 0 ]; then
-            isIdle=0
-        fi
-        if [ $isIdle -le 0 ] && [ $(($iterations % 21)) -eq 0 ]; then
-           echo "Activity detected, resetting shutdown timer to $shutdownIdleMinutes minutes."
-           break
-        fi
-        iterations=$(($iterations-1))
-    done
-done
-
-echo "No activity detected for $shutdownIdleMinutes minutes, shutting down."
-sudo shutdown -h now
+connectionBytes=\$(ss -lu | grep 7777 | awk -F ' ' '{s+=\$2} END {print s}')
+        
+if [ -z \$connectionBytes ] || [ \$connectionBytes -eq 0 ]; then
+    echo "No game activity detected. Shutting down."
+    sudo shutdown -h now
+fi
 EOF
 chmod +x /home/ubuntu/auto-shutdown.sh
 chown ubuntu:ubuntu /home/ubuntu/auto-shutdown.sh
 
-cat << 'EOF' > /etc/systemd/system/auto-shutdown.service
-[Unit]
-Description=Auto shutdown if no one is playing Satisfactory
-After=syslog.target network.target nss-lookup.target network-online.target
-
-[Service]
-Environment="LD_LIBRARY_PATH=./linux64"
-ExecStart=/home/ubuntu/auto-shutdown.sh
-User=ubuntu
-Group=ubuntu
-StandardOutput=journal
-Restart=on-failure
-KillSignal=SIGINT
-WorkingDirectory=/home/ubuntu
-
-[Install]
-WantedBy=multi-user.target
-EOF
-systemctl enable auto-shutdown
-systemctl start auto-shutdown
-
-# automated backups to s3 every 5 minutes
-su - ubuntu -c "crontab -u ubuntu -l | { cat; echo \"*/5 * * * * /usr/local/bin/aws s3 sync /home/ubuntu/.config/Epic/FactoryGame/Saved/SaveGames/server s3://$S3_SAVE_BUCKET\"; } | crontab -"
+# check game port for auto shutdown every 10 minutes
+su - ubuntu -c "crontab -u ubuntu -l | { cat; echo \"*/10 * * * * /home/ubuntu/auto-shutdown.sh\"; } | crontab -"
